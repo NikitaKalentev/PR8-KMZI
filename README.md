@@ -52,7 +52,7 @@ gost34.10-2012/
 
 1.Склонируйте репозиторий или скачайте все файлы в одну папку:
 
-git clone https://github.com/your-repo/gost34.10-2012.git
+git clone https://github.com/NikitaKalentev/PR8-KMZI.git
 
 cd gost34.10-2012
 
