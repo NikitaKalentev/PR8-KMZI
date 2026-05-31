@@ -2,13 +2,16 @@
 from modular import modinv
 
 class EllipticCurve:
-    def __init__(self, p, a, b):
+    def __init__(self, p: int, a: int, b: int):
         self.p = p
         self.a = a
         self.b = b
 
     def add(self, P, Q):
-        """Сложение двух точек. P и Q – кортежи (x, y) или None (бесконечная точка)."""
+        """
+        Сложение двух точек на кривой.
+        P, Q – кортежи (x, y) или None (бесконечно удалённая точка).
+        """
         if P is None:
             return Q
         if Q is None:
@@ -27,13 +30,13 @@ class EllipticCurve:
         y3 = (lam * (x1 - x3) - y1) % self.p
         return (x3, y3)
 
-    def multiply(self, k, P):
-        """Умножение точки на скаляр (double-and-add)."""
-        res = None
-        add = P
+    def multiply(self, k: int, P):
+        """Умножение точки P на скаляр k (алгоритм double-and-add)."""
+        result = None
+        addend = P
         while k:
             if k & 1:
-                res = self.add(res, add)
-            add = self.add(add, add)
+                result = self.add(result, addend)
+            addend = self.add(addend, addend)
             k >>= 1
-        return res
+        return result
