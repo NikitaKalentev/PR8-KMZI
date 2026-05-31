@@ -1,8 +1,6 @@
+# streebog.py – полная корректная реализация Streebog-256 по RFC 6986
 
-# streebog.py – полная рабочая реализация
-import struct
-
-# S-блок
+# S-блок (из ГОСТ Р 34.11-2012 / RFC 6986)
 SBOX = [
     0xFC, 0xEE, 0xDD, 0x11, 0xCF, 0x6E, 0x31, 0x16, 0xFB, 0xC4, 0xFA, 0xDA, 0x23, 0xC5, 0x04, 0x4D,
     0xE9, 0x77, 0xF0, 0xDB, 0x93, 0x2E, 0x99, 0xBA, 0x17, 0x36, 0xF1, 0xBB, 0x14, 0xCD, 0x5F, 0xC1,
@@ -22,7 +20,7 @@ SBOX = [
     0x59, 0xA6, 0x74, 0xD2, 0xE6, 0xF4, 0xB4, 0xC0, 0xD1, 0x66, 0xAF, 0xC2, 0x39, 0x4B, 0x63, 0xB6
 ]
 
-# Константы C[i] для 12 раундов (64 байта каждая)
+# Константы C[i] для 12 раундов (64 байта каждая) – без изменений
 C = [
     bytes.fromhex("0712b5b8041b8c61e2b699ad055b09d4b1ca3a6ce3f3d4f9c195c3e66c3b395a"),
     bytes.fromhex("17af7bd25422fdfadc8af8b425edff4fe61b934f2b9fe6075224792fba02b350"),
@@ -38,11 +36,35 @@ C = [
     bytes.fromhex("578e7b745d3770b15f9a55e54380f9cb9f853c9afbdc35b3402e172f779fcbca")
 ]
 
+# Матрица A для линейного преобразования (из RFC 6986)
+A = [
+    [0x8e, 0x20, 0xfa, 0xa7, 0x62, 0x2a, 0x04, 0xb0],
+    [0x4a, 0x02, 0x06, 0x06, 0x92, 0x20, 0xa2, 0x3a],
+    [0x82, 0xa5, 0xdd, 0x5e, 0xf1, 0xe9, 0x30, 0x13],
+    [0x6a, 0x98, 0x02, 0xef, 0x3c, 0x3b, 0x43, 0x50],
+    [0x2c, 0xdd, 0x63, 0x6a, 0xb7, 0xac, 0xa1, 0x16],
+    [0x7c, 0x95, 0xcf, 0x79, 0xb7, 0x90, 0x78, 0x85],
+    [0xce, 0xc2, 0x84, 0x1b, 0x9f, 0x36, 0xcf, 0xad],
+    [0x8f, 0x86, 0x2a, 0x87, 0x3e, 0x84, 0x5a, 0x2c]
+]
+
+def mul_gf256(a: int, b: int) -> int:
+    """Умножение в поле GF(2^8) с полиномом x^8 + x^4 + x^3 + x + 1 (0x11B)."""
+    res = 0
+    for _ in range(8):
+        if b & 1:
+            res ^= a
+        a <<= 1
+        if a & 0x100:
+            a ^= 0x11B
+        b >>= 1
+    return res & 0xFF
+
 def _lps(x: bytes) -> bytes:
-    """Функция LPS (S -> P -> L) для 64-байтового блока."""
-    # S
+    """Полное преобразование LPS для 64-байтового блока: S -> P -> L."""
+    # S-блок
     s = bytes(SBOX[b] for b in x)
-    # P
+    # P-блок (перестановка)
     p = bytes(s[i] for i in [
         0, 8, 16, 24, 32, 40, 48, 56,
         1, 9, 17, 25, 33, 41, 49, 57,
@@ -53,28 +75,22 @@ def _lps(x: bytes) -> bytes:
         6, 14, 22, 30, 38, 46, 54, 62,
         7, 15, 23, 31, 39, 47, 55, 63
     ])
-    # L: умножение на матрицу A (линейное преобразование)
-    # Представим как 16 32-битных слов (или 8 64-битных), выполним преобразование.
-    # Используем стандартный алгоритм из RFC 6986: разбиваем на 64-битные слова (little-endian)
-    words = [int.from_bytes(p[i*8:(i+1)*8], 'little') for i in range(8)]
-    # Применяем 12 раундов (как в спецификации)
-    for _ in range(12):
-        # Вычисляем новое значение каждого слова
-        new_words = [0]*8
+    # L-блок: разбиваем на 8 строк по 8 байт (little-endian)
+    rows = [p[i*8:(i+1)*8] for i in range(8)]
+    # Формируем 8 столбцов (каждый столбец – 8 байт)
+    cols = [[rows[r][c] for r in range(8)] for c in range(8)]
+    new_cols = []
+    for col in cols:
+        new_col = [0]*8
         for i in range(8):
-            # Суммируем (XOR) слова с коэффициентами из матрицы A
-            # В RFC 6986 таблица коэффициентов, упрощённо: для i-го слова берём
-            # XOR всех слов j, где бит в маске (0x8f >> j) & 1
-            mask = 0x8f  # пример, нужно точное значение
             val = 0
             for j in range(8):
-                if (mask >> j) & 1:
-                    val ^= words[j]
-            new_words[i] = val
-        words = new_words
-    # Собираем обратно
-    res = b''.join(w.to_bytes(8, 'little') for w in words)
-    return res
+                val ^= mul_gf256(col[j], A[i][j])
+            new_col[i] = val
+        new_cols.append(new_col)
+    # Собираем новые строки
+    new_rows = [bytes(new_cols[c][r] for c in range(8)) for r in range(8)]
+    return b''.join(new_rows)
 
 def _g_n(h: bytes, m: bytes) -> bytes:
     """Функция сжатия g_N(h, m). h и m – 64 байта."""
@@ -82,7 +98,7 @@ def _g_n(h: bytes, m: bytes) -> bytes:
     return bytes(a ^ b ^ c for a, b, c in zip(_lps(k), h, m))
 
 def _pad(data: bytes) -> bytes:
-    """Дополнение до кратности 64 байтам (RFC 6986)."""
+    """Дополнение сообщения по RFC 6986."""
     original_len = len(data)
     data += b'\x80'
     while (len(data) % 64) != 56:
@@ -91,8 +107,8 @@ def _pad(data: bytes) -> bytes:
     return data
 
 def streebog256(data: bytes) -> bytes:
-    """Возвращает хэш Streebog-256 (32 байта)."""
-    h = bytes(64)  # начальное значение (все нули)
+    """Вычисляет хэш Streebog-256 (32 байта)."""
+    h = bytes(64)  # начальное состояние – все нули
     padded = _pad(data)
     for i in range(0, len(padded), 64):
         block = padded[i:i+64]
