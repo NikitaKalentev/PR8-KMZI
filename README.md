@@ -54,7 +54,6 @@ gost34.10-2012/
 
 git clone https://github.com/NikitaKalentev/PR8-KMZI.git
 
-cd gost34.10-2012
 
 2.Запустите программу:
 
