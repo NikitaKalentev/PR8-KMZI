@@ -4,37 +4,37 @@ from elliptic import EllipticCurve
 from gost_sign import generate_keys, sign_message, verify_signature
 from streebog import streebog256
 
-# Параметры схемы (тестовые, из примера к ГОСТ Р 34.10-2012)
+# Параметры схемы (тестовые)
 p = 97
 a = 9
 b = 3
 q = 47
-P = (-8 % p, 1)  # (-8, 1) по модулю 97 -> (89, 1)
+P = (-8 % p, 1)  # (89, 1)
 curve = EllipticCurve(p, a, b)
 
-def write_private_key(filename, d):
+def write_private_key(filename: str, d: int):
     with open(filename, 'w') as f:
         f.write(str(d))
 
-def read_private_key(filename):
+def read_private_key(filename: str) -> int:
     with open(filename, 'r') as f:
         return int(f.readline().strip())
 
-def write_public_key(filename, Q):
+def write_public_key(filename: str, Q):
     with open(filename, 'w') as f:
         f.write(f"{Q[0]}\n{Q[1]}")
 
-def read_public_key(filename):
+def read_public_key(filename: str):
     with open(filename, 'r') as f:
         x = int(f.readline().strip())
         y = int(f.readline().strip())
         return (x, y)
 
-def write_signature(filename, r, s):
+def write_signature(filename: str, r: int, s: int):
     with open(filename, 'w') as f:
         f.write(f"{r}\n{s}")
 
-def read_signature(filename):
+def read_signature(filename: str):
     with open(filename, 'r') as f:
         r = int(f.readline().strip())
         s = int(f.readline().strip())
@@ -42,7 +42,7 @@ def read_signature(filename):
 
 def main():
     while True:
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("ГОСТ Р 34.10-2012 – Электронная подпись")
         print("1. Сгенерировать ключевую пару")
         print("2. Подписать файл")
@@ -66,7 +66,7 @@ def main():
                 continue
             with open(msg_file, 'rb') as f:
                 data = f.read()
-            msg_hash = streebog256(data)   # наша собственная хэш-функция
+            msg_hash = streebog256(data)
             d = read_private_key(key_file)
             r, s = sign_message(curve, q, P, d, msg_hash)
             sig_file = input("Имя файла для сохранения подписи: ")
